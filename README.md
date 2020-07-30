@@ -1,2 +1,9 @@
 # voronoi_pip
-A Novel Point Inclusion Test for Convex Polygons Based on Voronoi Tessellations
+
+Source code to reproduce the results given in the paper "A Novel Point Inclusion Test for Convex Polygons Based on Voronoi Tessellations".
+
+## Python dependencies
+
+numpy  
+matplotlib  
+tabulate  
