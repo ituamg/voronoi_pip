@@ -172,11 +172,19 @@ def sign_of_offset(points, poly):
         ndarray(dtype=bool): Result of the point inclusion test, (m,)
     """    
 
-    q_i = poly[...,np.newaxis]
-    q_j = np.roll(q_i, 1, axis=1)
+    # For readibility
+    X = 0
+    Y = 1
 
-    lhs = (points[1,np.newaxis,:] - q_j[1]) * (q_i[0] - q_j[0])
-    rhs = (points[0,np.newaxis,:] - q_j[0]) * (q_i[1] - q_j[1])
+    q = points[:,np.newaxis,:] # queried points
+    v = poly[...,np.newaxis] # vertices
+    v_r = np.roll(v, 1, axis=1) # rolled vertices
+
+    v_delta = v - v_r # differences between successive vertices
+    c = v_r[Y] * v_delta[X] - v_r[X] * v_delta[Y] # offsets
+
+    lhs = q[Y] * v_delta[X] - q[X] * v_delta[Y] 
+    rhs = c
 
     # Check if all True or all False, no mix
     result = (lhs < rhs).sum(axis=0) % poly.shape[1] == 0
