@@ -139,20 +139,27 @@ def crossing(points, poly):
         ndarray(dtype=bool): Result of the point inclusion test, (m,)
     """    
 
-    q_i = poly
-    q_j = np.roll(q_i, 1, axis=1)
+    # For readibility
+    X = 0
+    Y = 1
 
-    heads_above_ray = q_i[1,:,np.newaxis] > points[1,np.newaxis,:]
-    tails_above_ray = q_j[1,:,np.newaxis] > points[1,np.newaxis,:]
+    q = points[:,np.newaxis,:] # queried points
+    v = poly[...,np.newaxis] # vertices
+    v_r = np.roll(v, 1, axis=1) # rolled vertices
 
+    v_delta = v - v_r # differences between successive vertices
+    c = v_r[Y] * v_delta[X] - v_r[X] * v_delta[Y] # offsets
+
+    heads_above_ray = v[Y] > q[Y]
+    tails_above_ray = v_r[Y] > q[Y]
     edges_may_cross_ray = np.logical_xor(heads_above_ray, tails_above_ray)
 
-    lhs = (points[1,np.newaxis,:] - q_j[1,:,np.newaxis]) * (q_i[0] - q_j[0])[...,np.newaxis]
-    rhs = (points[0,np.newaxis,:] - q_j[0,:,np.newaxis]) * (q_i[1] - q_j[1])[...,np.newaxis]
+    lhs = q[Y] * v_delta[X] - q[X] * v_delta[Y] 
+    rhs = c
 
-    edge_heads_up = q_i[1] > q_j[1]
+    edge_heads_up = v[Y] > v_r[Y]
     
-    on_left_side = np.where(edge_heads_up[:,np.newaxis], lhs > rhs, lhs < rhs)
+    on_left_side = np.where(edge_heads_up, lhs > rhs, lhs < rhs)
 
     crossings = np.logical_and(edges_may_cross_ray, on_left_side)
 
