@@ -60,6 +60,10 @@ rotation_of_poly = pi/6
 polygon_test_sizes = [5, 8, 11]
 point_test_sizes = list(range(1024, 1024000, 10240))
 
+# For readibility
+X = 0
+Y = 1
+
 
 def calculate_centroid(poly):
     """Calculates centroid of a polygon
@@ -71,12 +75,12 @@ def calculate_centroid(poly):
         ndarray: centroid, (2,)
     """    
     
-    q_i = poly
-    q_j = np.roll(q_i, 1, axis=1)
+    v = poly # vertices
+    v_r = np.roll(v, 1, axis=1) # rolled vertices
 
-    a = q_j[0,:] * q_i[1,:] - q_i[0,:] * q_j[1,:]
+    a = v_r[X] * v[Y] - v[X] * v_r[Y]
     area = a.sum() / 2
-    centroid = ((q_i + q_j) @ a) / (6 * area)
+    centroid = ((v + v_r) @ a) / (6 * area)
 
     return centroid
 
@@ -93,12 +97,12 @@ def calculate_generators(poly):
 
     p_0 = calculate_centroid(poly)
 
-    q_i = poly
-    q_j = np.roll(q_i, 1, axis=1)
+    v = poly # vertices
+    v_r = np.roll(v, 1, axis=1) # rolled vertices
 
-    a = q_i[1] - q_j[1]
-    b = q_j[0] - q_i[0]
-    c = - (a * q_i[0] + b * q_i[1])
+    a = v[Y] - v_r[Y]
+    b = v_r[X] - v[X]
+    c = - (a * v[X] + b * v[Y])
 
     w = np.array([[b**2 - a**2, -2 * a * b],
                   [-2 * a * b, a**2 - b**2]])
@@ -139,10 +143,6 @@ def crossing(points, poly):
         ndarray(dtype=bool): Result of the point inclusion test, (m,)
     """    
 
-    # For readibility
-    X = 0
-    Y = 1
-
     q = points[:,np.newaxis,:] # queried points
     v = poly[...,np.newaxis] # vertices
     v_r = np.roll(v, 1, axis=1) # rolled vertices
@@ -178,10 +178,6 @@ def sign_of_offset(points, poly):
     Returns:
         ndarray(dtype=bool): Result of the point inclusion test, (m,)
     """    
-
-    # For readibility
-    X = 0
-    Y = 1
 
     q = points[:,np.newaxis,:] # queried points
     v = poly[...,np.newaxis] # vertices
