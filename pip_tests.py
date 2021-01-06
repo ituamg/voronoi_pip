@@ -58,7 +58,7 @@ rotation_of_poly = pi/6
 
 # Number of edges for testing
 polygon_test_sizes = [5, 8, 11]
-point_test_sizes = list(range(1024, 1024000, 10240))
+point_test_sizes = list(range(10240, 1024000, 10240))
 
 # For readibility
 X = 0
@@ -145,23 +145,18 @@ def crossing(points, poly):
 
     q = points[:,np.newaxis,:] # queried points
     v = poly[...,np.newaxis] # vertices
-    v_r = np.roll(v, 1, axis=1) # rolled vertices
+    vr = np.roll(v, 1, axis=1) # rolled vertices
 
-    v_delta = v - v_r # differences between successive vertices
-    c = v_r[Y] * v_delta[X] - v_r[X] * v_delta[Y] # offsets
+    v_delta = v - vr # differences between successive vertices
 
-    heads_above_ray = v[Y] > q[Y]
-    tails_above_ray = v_r[Y] > q[Y]
-    edges_may_cross_ray = np.logical_xor(heads_above_ray, tails_above_ray)
+    in_range = np.logical_xor(v[Y] > q[Y], vr[Y] > q[Y])
 
+    going_up = v[Y] > vr[Y]
     lhs = q[Y] * v_delta[X] - q[X] * v_delta[Y] 
-    rhs = c
+    rhs = vr[Y] * v_delta[X] - vr[X] * v_delta[Y]
+    on_left = np.where(going_up, lhs > rhs, lhs < rhs)
 
-    edge_heads_up = v[Y] > v_r[Y]
-    
-    on_left_side = np.where(edge_heads_up, lhs > rhs, lhs < rhs)
-
-    crossings = np.logical_and(edges_may_cross_ray, on_left_side)
+    crossings = np.logical_and(in_range, on_left)
 
     result = (crossings.sum(axis=0) % 2) != 0
 
@@ -181,13 +176,12 @@ def sign_of_offset(points, poly):
 
     q = points[:,np.newaxis,:] # queried points
     v = poly[...,np.newaxis] # vertices
-    v_r = np.roll(v, 1, axis=1) # rolled vertices
+    vr = np.roll(v, 1, axis=1) # rolled vertices
 
-    v_delta = v - v_r # differences between successive vertices
-    c = v_r[Y] * v_delta[X] - v_r[X] * v_delta[Y] # offsets
+    v_delta = v - vr # differences between successive vertices
 
     lhs = q[Y] * v_delta[X] - q[X] * v_delta[Y] 
-    rhs = c
+    rhs = vr[Y] * v_delta[X] - vr[X] * v_delta[Y]
 
     # Check if all True or all False, no mix
     result = (lhs < rhs).sum(axis=0) % poly.shape[1] == 0
