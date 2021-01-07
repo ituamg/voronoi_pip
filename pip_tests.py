@@ -46,7 +46,7 @@ rg = default_rng(12345)
 
 # Timeit constants
 REPEAT = 1
-NUMBER = 1
+NUMBER = 10
 
 # Time scale of the results
 TIME_SCALE = 1e-9 # 1ns
@@ -58,7 +58,7 @@ rotation_of_poly = pi/6
 
 # Number of edges for testing
 polygon_test_sizes = [5, 8, 11]
-point_test_sizes = list(range(10240, 1024000, 10240))
+point_test_sizes = list(range(20480, 512000, 20480))
 
 # For readibility
 X = 0
@@ -152,8 +152,10 @@ def crossing(points, poly):
     in_range = np.logical_xor(v[Y] > q[Y], vr[Y] > q[Y])
 
     going_up = v[Y] > vr[Y]
+
     lhs = q[Y] * v_delta[X] - q[X] * v_delta[Y] 
     rhs = vr[Y] * v_delta[X] - vr[X] * v_delta[Y]
+
     on_left = np.where(going_up, lhs > rhs, lhs < rhs)
 
     crossings = np.logical_and(in_range, on_left)
@@ -440,7 +442,7 @@ def main():
     # poly = create_convex_poly(n_vertices=5, radius=radius_of_poly)
     # tfed_poly = transform(poly, (*center_of_poly, rotation_of_poly))
 
-    # test_points = near_poly_sample(tfed_poly, MAX_TEST_POINTS, 0.1)
+    # test_points = near_poly_sample(tfed_poly, 10000, 0.2)
 
     # visualize_test(test_points, tfed_poly, crossing(test_points, tfed_poly), "ray crossing")
     # visualize_test(test_points, tfed_poly, sign_of_offset(test_points, tfed_poly), "sign of offset")
