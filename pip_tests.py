@@ -60,7 +60,7 @@ rotation_of_poly = pi/6
 polygon_test_sizes = range(3, 16)
 
 # Number of test points
-N_TEST_POINTS = 100000
+N_TEST_POINTS = 1000000
 
 # For readibility
 X = 0
