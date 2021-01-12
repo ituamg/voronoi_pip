@@ -38,7 +38,6 @@ import time
 from math import sin, cos, pi
 import timeit
 from numpy.random import default_rng
-from tabulate import tabulate
 import pickle
 
 # seed the random generator
