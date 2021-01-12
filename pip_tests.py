@@ -45,8 +45,8 @@ import pickle
 rg = default_rng(12345)
 
 # Timeit constants
-REPEAT = 1
-NUMBER = 1
+REPEAT = 10
+NUMBER = 10
 
 # Time scale of the results
 TIME_SCALE = 1e-9 # 1ns
@@ -57,8 +57,14 @@ radius_of_poly = 10.0
 rotation_of_poly = pi/6
 
 # Number of edges for testing
-polygon_test_sizes = [5, 8, 11]
-point_test_sizes = list(range(1024, 1024000, 10240))
+polygon_test_sizes = range(3, 16)
+
+# Number of test points
+N_TEST_POINTS = 1000000
+
+# For readibility
+X = 0
+Y = 1
 
 
 def calculate_centroid(poly):
@@ -71,12 +77,12 @@ def calculate_centroid(poly):
         ndarray: centroid, (2,)
     """    
     
-    q_i = poly
-    q_j = np.roll(q_i, 1, axis=1)
+    v = poly # vertices
+    v_r = np.roll(v, 1, axis=1) # rolled vertices
 
-    a = q_j[0,:] * q_i[1,:] - q_i[0,:] * q_j[1,:]
+    a = v_r[X] * v[Y] - v[X] * v_r[Y]
     area = a.sum() / 2
-    centroid = ((q_i + q_j) @ a) / (6 * area)
+    centroid = ((v + v_r) @ a) / (6 * area)
 
     return centroid
 
@@ -93,12 +99,12 @@ def calculate_generators(poly):
 
     p_0 = calculate_centroid(poly)
 
-    q_i = poly
-    q_j = np.roll(q_i, 1, axis=1)
+    v = poly # vertices
+    v_r = np.roll(v, 1, axis=1) # rolled vertices
 
-    a = q_i[1] - q_j[1]
-    b = q_j[0] - q_i[0]
-    c = - (a * q_i[0] + b * q_i[1])
+    a = v[Y] - v_r[Y]
+    b = v_r[X] - v[X]
+    c = - (a * v[X] + b * v[Y])
 
     w = np.array([[b**2 - a**2, -2 * a * b],
                   [-2 * a * b, a**2 - b**2]])
@@ -139,22 +145,22 @@ def crossing(points, poly):
         ndarray(dtype=bool): Result of the point inclusion test, (m,)
     """    
 
-    q_i = poly
-    q_j = np.roll(q_i, 1, axis=1)
+    q = points[:,np.newaxis,:] # queried points
+    v = poly[...,np.newaxis] # vertices
+    vr = np.roll(v, 1, axis=1) # rolled vertices
 
-    heads_above_ray = q_i[1,:,np.newaxis] > points[1,np.newaxis,:]
-    tails_above_ray = q_j[1,:,np.newaxis] > points[1,np.newaxis,:]
+    v_delta = v - vr # differences between successive vertices
 
-    edges_may_cross_ray = np.logical_xor(heads_above_ray, tails_above_ray)
+    in_range = np.logical_xor(v[Y] > q[Y], vr[Y] > q[Y])
 
-    lhs = (points[1,np.newaxis,:] - q_j[1,:,np.newaxis]) * (q_i[0] - q_j[0])[...,np.newaxis]
-    rhs = (points[0,np.newaxis,:] - q_j[0,:,np.newaxis]) * (q_i[1] - q_j[1])[...,np.newaxis]
+    going_up = v[Y] > vr[Y]
 
-    edge_heads_up = q_i[1] > q_j[1]
-    
-    on_left_side = np.where(edge_heads_up[:,np.newaxis], lhs > rhs, lhs < rhs)
+    lhs = q[Y] * v_delta[X] - q[X] * v_delta[Y] 
+    rhs = vr[Y] * v_delta[X] - vr[X] * v_delta[Y]
 
-    crossings = np.logical_and(edges_may_cross_ray, on_left_side)
+    on_left = np.where(going_up, lhs > rhs, lhs < rhs)
+
+    crossings = np.logical_and(in_range, on_left)
 
     result = (crossings.sum(axis=0) % 2) != 0
 
@@ -172,11 +178,14 @@ def sign_of_offset(points, poly):
         ndarray(dtype=bool): Result of the point inclusion test, (m,)
     """    
 
-    q_i = poly[...,np.newaxis]
-    q_j = np.roll(q_i, 1, axis=1)
+    q = points[:,np.newaxis,:] # queried points
+    v = poly[...,np.newaxis] # vertices
+    vr = np.roll(v, 1, axis=1) # rolled vertices
 
-    lhs = (points[1,np.newaxis,:] - q_j[1]) * (q_i[0] - q_j[0])
-    rhs = (points[0,np.newaxis,:] - q_j[0]) * (q_i[1] - q_j[1])
+    v_delta = v - vr # differences between successive vertices
+
+    lhs = q[Y] * v_delta[X] - q[X] * v_delta[Y] 
+    rhs = vr[Y] * v_delta[X] - vr[X] * v_delta[Y]
 
     # Check if all True or all False, no mix
     result = (lhs < rhs).sum(axis=0) % poly.shape[1] == 0
@@ -233,48 +242,29 @@ def create_convex_poly(n_vertices=7, radius=1.0, center=(0.0,0.0)):
     return vertices
 
 
-def setup_figure():
-    fig = plt.figure(figsize=(5, 13))
-    # Turn off axis lines and ticks of the big subplot
-    big_ax = fig.add_subplot(111)
-    big_ax.spines['top'].set_color('none')
-    big_ax.spines['bottom'].set_color('none')
-    big_ax.spines['left'].set_color('none')
-    big_ax.spines['right'].set_color('none')
-    big_ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
-    # Set common labels
-    big_ax.set_xlabel("Number of points")
-    # big_ax.set_ylabel("Per point processing time (ns)")
-    axes = fig.subplots(3, 1, sharex=True, sharey=True)
-    fig.subplots_adjust(left=0.12, right=0.95, top=0.98, bottom=0.04)
-    
-    return fig, axes
-
-
 def generate_timing_plot(all_results):
-    
-    fig, axes = setup_figure()
+    methods = {"ray crossing", "sign of offset", "voronoi"}
 
-    for idx, n_vertices in enumerate(all_results.keys()):
-        timings = all_results[n_vertices]
-        ax = axes[idx]
+    fig, ax = plt.subplots(figsize=(5,5))
 
-        linestyles = ['-.', '--', '-', ':']
-        ax.set_title("Tests for {} edges".format(n_vertices))
-        ax.set_yscale("log")
-        ax.grid(True, 'both')
-        # ax.set_xlabel("Number of points")
-        ax.set_ylabel("Per point processing time (ns)")
-        for i, method in enumerate(timings.keys()):
-            x = []
-            y = []
-            for n_pts in timings[method].keys():
-                x.append(n_pts)
-                y.append(timings[method][n_pts])
-            ax.plot(x, y, label=method, linestyle=linestyles[i], linewidth=3)
-        ax.legend()
-    
+    linestyles = ['-.', '--', '-', ':']
+    ax.set_title("Tests for {} points".format(N_TEST_POINTS))
+    ax.set_yscale("log")
+    ax.grid(True, 'both')
+    ax.set_xlabel("Number of edges")
+    ax.set_ylabel("Per point processing time (ns)")
+
+    for i, method in enumerate(methods):
+        x = []
+        y = []
+        for idx, n_vertices in enumerate(all_results.keys()):
+            x.append(n_vertices)
+            y.append(all_results[n_vertices][method])
+        ax.plot(x, y, label=method, linestyle=linestyles[i], linewidth=3)
+    ax.legend()
+    fig.tight_layout()
     fig.savefig("experimental.pdf")
+    fig.savefig("experimental.png")
 
 
 def experimental_results():
@@ -291,40 +281,34 @@ def experimental_results():
 
         tfed_poly = transform(poly, (*center_of_poly, rotation_of_poly))
 
-        test_points = (rg.random((2,point_test_sizes[-1])) - 0.5) * 3 * radius_of_poly + np.array(center_of_poly).reshape(2,1)
+        test_points = (rg.random((2, N_TEST_POINTS)) - 0.5) * 3 * radius_of_poly + np.array(center_of_poly).reshape(2,1)
 
 
         # ################ RAY CROSSING TEST ################
-        for n_points in point_test_sizes:
-
-            timer_crossing = timeit.Timer(lambda : crossing(test_points[:,:n_points], tfed_poly))
-            crossing_time = timer_crossing.repeat(repeat=REPEAT, number=NUMBER)
-            crossing_time = np.min(crossing_time) / NUMBER / n_points / TIME_SCALE
-            print("Timing with ray crossing for {} vertices, {} points: {} ns/pt".format(n_vertices, n_points, crossing_time))
-            
-            timings["ray crossing"][n_points] = crossing_time            
+        timer_crossing = timeit.Timer(lambda : crossing(test_points, tfed_poly))
+        crossing_time = timer_crossing.repeat(repeat=REPEAT, number=NUMBER)
+        crossing_time = np.min(crossing_time) / NUMBER / N_TEST_POINTS / TIME_SCALE
+        print("Timing with ray crossing for {} vertices, {} points: {} ns/pt".format(n_vertices, N_TEST_POINTS, crossing_time))
+        
+        timings["ray crossing"] = crossing_time            
 
 
         # ################ SIGN OF OFFSET TEST ################
-        for n_points in point_test_sizes:
-
-            timer_signoff = timeit.Timer(lambda : sign_of_offset(test_points[:,:n_points], tfed_poly))
-            signoff_time = timer_signoff.repeat(repeat=REPEAT, number=NUMBER)
-            signoff_time = np.min(signoff_time) / NUMBER / n_points / TIME_SCALE
-            print("Timing with sign of offset for {} vertices, {} points: {} ns/pt".format(n_vertices, n_points, signoff_time))
-            
-            timings["sign of offset"][n_points] = signoff_time
+        timer_signoff = timeit.Timer(lambda : sign_of_offset(test_points, tfed_poly))
+        signoff_time = timer_signoff.repeat(repeat=REPEAT, number=NUMBER)
+        signoff_time = np.min(signoff_time) / NUMBER / N_TEST_POINTS / TIME_SCALE
+        print("Timing with sign of offset for {} vertices, {} points: {} ns/pt".format(n_vertices, N_TEST_POINTS, signoff_time))
+        
+        timings["sign of offset"] = signoff_time
 
 
-        # ################ VORONOI TEST ################
-        for n_points in point_test_sizes:
-            
-            timer_voronoi = timeit.Timer(lambda : voronoi(test_points[:,:n_points], tfed_poly))
-            voronoi_time = timer_voronoi.repeat(repeat=REPEAT, number=NUMBER)
-            voronoi_time = np.min(voronoi_time) / NUMBER / n_points / TIME_SCALE
-            print("Timing with voronoi for {} vertices, {} points: {} ns/pt".format(n_vertices, n_points, voronoi_time))
+        # ################ VORONOI TEST ################            
+        timer_voronoi = timeit.Timer(lambda : voronoi(test_points, tfed_poly))
+        voronoi_time = timer_voronoi.repeat(repeat=REPEAT, number=NUMBER)
+        voronoi_time = np.min(voronoi_time) / NUMBER / N_TEST_POINTS / TIME_SCALE
+        print("Timing with voronoi for {} vertices, {} points: {} ns/pt".format(n_vertices, N_TEST_POINTS, voronoi_time))
 
-            timings["voronoi"][n_points] = voronoi_time
+        timings["voronoi"] = voronoi_time
 
 
         all_results[n_vertices] = timings
@@ -334,12 +318,12 @@ def experimental_results():
 
 def near_poly_sample(poly, n_points, k_nearness=0.1):
     
-    q_i = poly
-    q_j = np.roll(q_i, 1, axis=1)
+    v = poly
+    vr = np.roll(v, 1, axis=1)
 
-    a = q_i[1] - q_j[1]
-    b = q_j[0] - q_i[0]
-    c = - (a * q_i[0] + b * q_i[1])
+    a = v[1] - vr[1]
+    b = vr[0] - v[0]
+    c = - (a * v[0] + b * v[1])
 
     x = (rg.random((2,n_points)) - 0.5) * 2 * (1 + 2 * k_nearness) * radius_of_poly + np.array(center_of_poly).reshape(2,1)
     centroid = calculate_centroid(poly)
@@ -370,54 +354,6 @@ def correctness_test():
         print("Correctness test failed")
 
 
-def table_generation(data):
-
-    table = []
-    table.append(["", "", "\multicolumn{3}{|c|}{Algorithms}", "\\\\ %"])
-    table.append(["\cline{3-5} %"])
-    table.append(["",      "",       "Ray",      "Sign of","",        "Diff"])
-    table.append(["Edges", "Points", "Crossing", "Offset", "Voronoi", "\%"])
-    n_v_range = list(data.keys())
-    for n_v in n_v_range:
-        table.append(["\\hline %"])
-        timings = data[n_v]
-        methods = list(timings.keys())
-        for method in methods:
-            result = timings[method]
-            n_p_range = list(result.keys())
-            short_n_p_range = [n_p_range[0], 
-                               n_p_range[1 * len(n_p_range) // 6],
-                               n_p_range[2 * len(n_p_range) // 6],
-                               n_p_range[3 * len(n_p_range) // 6],
-                               n_p_range[4 * len(n_p_range) // 6],
-                               n_p_range[5 * len(n_p_range) // 6],
-                               n_p_range[-1]]
-            for idx, n_p in enumerate(short_n_p_range):
-                row = []
-                row.append(n_v if idx == 3 else "")
-                row.append(n_p)
-                timez = np.array([timings[methods[0]][n_p], timings[methods[1]][n_p], timings[methods[2]][n_p]])
-                for t in timez:
-                    if t == timez.min():
-                        row.append("\\textbf{{{:3.2f}}}".format(t))
-                    else:
-                        row.append("{:3.2f}".format(t))
-                best_two = np.partition(timez, (0,1))
-                diff_percent = (best_two[1] - best_two[0]) / best_two[1] * 100
-                row.append("{:2.1f}".format(diff_percent))
-                table.append(row)
-
-            break # do not loop the loop
-
-    tabular_latex = tabulate(table, tablefmt="latex_raw")
-    print(tabular_latex)
-
-    with open('timings.tex', "w") as f:
-        f.write(tabular_latex)
-
-    return table
-
-
 def main():
 
     all_results = experimental_results()
@@ -429,13 +365,12 @@ def main():
     #     all_results = pickle.load(f)
 
     generate_timing_plot(all_results)
-    table_generation(all_results)
     correctness_test()
 
     # poly = create_convex_poly(n_vertices=5, radius=radius_of_poly)
     # tfed_poly = transform(poly, (*center_of_poly, rotation_of_poly))
 
-    # test_points = near_poly_sample(tfed_poly, MAX_TEST_POINTS, 0.1)
+    # test_points = near_poly_sample(tfed_poly, 10000, 0.2)
 
     # visualize_test(test_points, tfed_poly, crossing(test_points, tfed_poly), "ray crossing")
     # visualize_test(test_points, tfed_poly, sign_of_offset(test_points, tfed_poly), "sign of offset")
