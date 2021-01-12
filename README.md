@@ -6,4 +6,3 @@ Source code to reproduce the results given in the paper "A Novel Point Inclusion
 
 numpy  
 matplotlib  
-tabulate  
